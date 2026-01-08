@@ -1,13 +1,12 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api/vendor"
+  baseURL: "http://localhost:5000/api/auth"
 });
 
-export const signupVendor = (formData) =>
-  API.post("/signup", formData, {
-    headers: { "Content-Type": "multipart/form-data" }
-  });
+export const signupVendor = (data) =>
+  API.post("/signup", data);
 
 export const loginVendor = (data) =>
   API.post("/login", data);
+

@@ -16,9 +16,7 @@ const Login = () => {
       const res = await loginVendor({ email, password });
       login(res.data.token, res.data.vendorStatus, res.data.vendor);
 
-      res.data.vendorStatus === "APPROVED"
-        ? navigate("/pricing")
-        : navigate("/vendor/pending-approval");
+      navigate("/pricing");
     } catch {
       alert("Invalid credentials");
     }

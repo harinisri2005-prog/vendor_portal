@@ -1,6 +1,7 @@
 import "../styles/auth.css";
 import { useState } from "react";
 import { signupVendor } from "../api/authApi";
+import { uploadImage } from "../api/uploadApi";
 import { useNavigate, Link } from "react-router-dom";
 import { locations } from "../data/locations";
 
@@ -114,13 +115,28 @@ const Signup = () => {
       return;
     }
 
-    // Backend not ready → we stop here logically
-    // Later, you’ll send FormData
+    // ---- UPLOAD KYC TO CLOUDINARY FIRST ----
+    setLoading(true);
+    const kycUrls = {};
+    try {
+      for (const [type, file] of Object.entries(kycDocs)) {
+        const { data } = await uploadImage(file);
+        kycUrls[type] = data.url;
+      }
 
-    console.log("FORM DATA:", form);
-    console.log("KYC DOCS:", kycDocs);
+      const signupData = {
+        ...form,
+        kycUrls
+      };
 
-    navigate("/vendor/pending-approval");
+      await signupVendor(signupData);
+      alert("Registration successful!");
+      navigate("/pricing");
+    } catch (err) {
+      setError(err.response?.data?.error || "Signup failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
   // ---------------- PREVIEW FILE ----------------
   const previewFile = (file) => {

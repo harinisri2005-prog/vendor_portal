@@ -5,7 +5,7 @@ const ProtectedRoute = ({ children }) => {
   const { token, status } = useAuth();
 
   if (!token) return <Navigate to="/vendor/login" />;
-  if (status !== "APPROVED") return <Navigate to="/vendor/pending-approval" />;
+
 
   return children;
 };
