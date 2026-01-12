@@ -4,15 +4,6 @@ import { signupVendor } from "../api/authApi";
 import { useNavigate, Link } from "react-router-dom";
 import { locations } from "../data/locations";
 
-const REQUIRED_KYC = ["AADHAAR", "PAN", "GST"];
-
-const KYC_LABELS = {
-  AADHAAR: "Aadhaar Card",
-  PAN: "PAN Card",
-  GST: "GST Certificate",
-  TRADE_LICENSE: "Trade License"
-};
-
 const Signup = () => {
   const navigate = useNavigate();
 
@@ -29,9 +20,12 @@ const Signup = () => {
     confirmPassword: ""
   });
 
-  // { AADHAAR: File, PAN: File, GST: File, TRADE_LICENSE?: File }
-  const [kycDocs, setKycDocs] = useState({});
-  const [selectedKycType, setSelectedKycType] = useState("");
+  const [files, setFiles] = useState({
+    AADHAAR: null,
+    PAN: null,
+    GST: null,
+    TRADE_LICENSE: null
+  });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,10 +45,9 @@ const Signup = () => {
     setForm({ ...form, [name]: value });
   };
 
-  // ---------------- KYC UPLOAD ----------------
-  const handleKycUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file || !selectedKycType) return;
+  // ---------------- FILE CHANGE ----------------
+  const handleFileChange = (type, file) => {
+    if (!file) return;
 
     const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
     if (!allowedTypes.includes(file.type)) {
@@ -63,15 +56,15 @@ const Signup = () => {
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setError("KYC file size must be under 5MB");
+      setError("File size must be under 5MB");
       return;
     }
 
     setError("");
 
-    setKycDocs((prev) => ({
+    setFiles((prev) => ({
       ...prev,
-      [selectedKycType]: file
+      [type]: file
     }));
   };
 
@@ -79,71 +72,71 @@ const Signup = () => {
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
+    // ---------- VALIDATIONS ----------
     if (form.phone.length !== 10) {
       setError("Phone number must be exactly 10 digits");
+      setLoading(false);
       return;
     }
 
     if (form.pincode.length !== 6) {
       setError("Pincode must be exactly 6 digits");
+      setLoading(false);
       return;
     }
 
     if (form.password.length < 6) {
       setError("Password must be at least 6 characters");
+      setLoading(false);
       return;
     }
 
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
+      setLoading(false);
       return;
     }
 
-    // ---- REQUIRED KYC CHECK ----
-    const missingDocs = REQUIRED_KYC.filter(
-      (doc) => !kycDocs[doc]
-    );
+    // ---------- REQUIRED KYC CHECK ----------
+    if (!files.AADHAAR || !files.PAN || !files.GST) {
+      setError("Aadhaar, PAN, and GST documents are mandatory");
+      setLoading(false);
+      return;
+    }
 
-    if (missingDocs.length > 0) {
+    try {
+      const formData = new FormData();
+
+      // Text fields
+      Object.entries(form).forEach(([key, value]) => {
+        if (key !== "confirmPassword") {
+          formData.append(key, value);
+        }
+      });
+
+      // File fields (MUST MATCH BACKEND)
+      formData.append("AADHAAR", files.AADHAAR);
+      formData.append("PAN", files.PAN);
+      formData.append("GST", files.GST);
+
+      if (files.TRADE_LICENSE) {
+        formData.append("TRADE_LICENSE", files.TRADE_LICENSE);
+      }
+
+      await signupVendor(formData);
+
+      navigate("/vendor/pending-approval");
+    } catch (err) {
       setError(
-        `Please upload mandatory documents: ${missingDocs
-          .map((d) => KYC_LABELS[d])
-          .join(", ")}`
+        err.response?.data?.message ||
+        "Signup failed. Please try again."
       );
-      return;
-    }
-
-    // Backend not ready → we stop here logically
-    // Later, you’ll send FormData
-
-    console.log("FORM DATA:", form);
-    console.log("KYC DOCS:", kycDocs);
-
-    navigate("/vendor/pending-approval");
-  };
-  // ---------------- PREVIEW FILE ----------------
-  const previewFile = (file) => {
-    if (!file) return;
-
-    const fileURL = URL.createObjectURL(file);
-    window.open(fileURL, "_blank");
-  };
-
-  // ---------------- REMOVE KYC ----------------
-  const removeKyc = (type) => {
-    setKycDocs((prev) => {
-      const updated = { ...prev };
-      delete updated[type];
-      return updated;
-    });
-
-    // If user removed the currently selected type, reset dropdown
-    if (selectedKycType === type) {
-      setSelectedKycType("");
+    } finally {
+      setLoading(false);
     }
   };
-
 
   return (
     <div className="auth-page">
@@ -183,79 +176,18 @@ const Signup = () => {
         <input type="password" name="password" placeholder="Password" value={form.password} onChange={handleChange} required />
         <input type="password" name="confirmPassword" placeholder="Confirm Password" value={form.confirmPassword} onChange={handleChange} required />
 
-        {/* -------- KYC SECTION -------- */}
-        <select
-          value={selectedKycType}
-          onChange={(e) => setSelectedKycType(e.target.value)}
-        >
-          <option value="">Select KYC Type</option>
-          <option value="AADHAAR">Aadhaar Card (Required)</option>
-          <option value="PAN">PAN Card (Required)</option>
-          <option value="GST">GST Certificate (Required)</option>
-          <option value="TRADE_LICENSE">Trade License (Optional)</option>
-        </select>
+        {/* ---------- KYC FILES ---------- */}
+        <label>Aadhaar Card (Required)</label>
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleFileChange("AADHAAR", e.target.files[0])} required />
 
-        <input
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          onChange={handleKycUpload}
-          disabled={!selectedKycType}
-        />
+        <label>PAN Card (Required)</label>
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleFileChange("PAN", e.target.files[0])} required />
 
-        {/* -------- UPLOADED DOCS WITH FILE NAMES -------- */}
-        {Object.keys(kycDocs).length > 0 && (
-          <div style={{ fontSize: "13px", color: "#aaa", marginTop: "12px" }}>
-            <strong>Uploaded Documents:</strong>
+        <label>GST Certificate (Required)</label>
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleFileChange("GST", e.target.files[0])} required />
 
-            <ul style={{ marginTop: "8px", paddingLeft: "18px" }}>
-              {Object.entries(kycDocs).map(([type, file]) => (
-                <li
-                  key={type}
-                  style={{
-                    marginBottom: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    flexWrap: "wrap"
-                  }}
-                >
-                  {/* Document label */}
-                  <span style={{ color: "#d4af37" }}>
-                    {KYC_LABELS[type]} →
-                  </span>
-
-                  {/* Clickable file name (PREVIEW) */}
-                  <span
-                    onClick={() => previewFile(file)}
-                    style={{
-                      color: "#000",
-                      cursor: "pointer",
-                      textDecoration: "underline"
-                    }}
-                    title="Click to preview"
-                  >
-                    {file.name}
-                  </span>
-
-                  {/* Remove (✕) */}
-                  <span
-                    onClick={() => removeKyc(type)}
-                    title="Remove document"
-                    style={{
-                      color: "#ff6b6b",
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                      marginLeft: "6px"
-                    }}
-                  >
-                    ✕
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
+        <label>Trade License (Optional)</label>
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => handleFileChange("TRADE_LICENSE", e.target.files[0])} />
 
         <button disabled={loading}>
           {loading ? "Please wait..." : "Register"}

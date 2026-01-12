@@ -7,20 +7,34 @@ import { useNavigate, Link } from "react-router-dom";
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const submit = async (e) => {
     e.preventDefault();
+    setError("");
+
     try {
       const res = await loginVendor({ email, password });
-      login(res.data.token, res.data.vendorStatus, res.data.vendor);
+      const { token, status, vendor } = res.data;
 
-      res.data.vendorStatus === "APPROVED"
-        ? navigate("/pricing")
-        : navigate("/vendor/pending-approval");
-    } catch {
-      alert("Invalid credentials");
+      // Save auth globally
+      login(token, status, vendor);
+
+      // Status-based redirect
+      if (status === "APPROVED") {
+        navigate("/vendor/dashboard");
+      } else if (status === "PENDING_APPROVAL") {
+        navigate("/vendor/pending-approval");
+      } else {
+        navigate("/vendor/rejected");
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Invalid credentials"
+      );
     }
   };
 
@@ -29,11 +43,13 @@ const Login = () => {
       <form className="auth-box" onSubmit={submit}>
         <h2>Seller Login</h2>
 
+        {error && <div className="error-text">{error}</div>}
+
         <input
           type="email"
           placeholder="Email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
 
@@ -41,7 +57,7 @@ const Login = () => {
           type="password"
           placeholder="Password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
+          onChange={(e) => setPassword(e.target.value)}
           required
         />
 
